@@ -1,0 +1,510 @@
+from tkinter import *
+import random
+import time
+
+
+class People(object):
+    def __init__(self, ID, floor_num_count, curr_floor=0, destination_floor=0, in_elevator=0, finished=0):
+        self.identity = ID
+        self.indicator = in_elevator
+        self.finished = finished
+        self.floors_moved = 0
+        self.waiting_time = 0
+        #####
+        curr_floor = random.randint(0, floor_num_count)
+        self.on_floor = curr_floor
+        #####
+        destination_floor = random.randint(0, floor_num_count)
+        #####
+        while destination_floor == curr_floor:
+            destination_floor = random.randint(0, floor_num_count)
+        #####
+        self.going_floor = destination_floor
+        self.fill = "#" + ("%06x"%random.randint(50000, 1000000))
+
+class Elevator(object):
+    def __init__(self, data_set_init, frame, curr_floor =-1): # people_list, people_ct, floor_ct
+        self.people_lst = data_set_init.cust_list
+        self.people_count = data_set_init.people_count_int
+        self.floor = data_set_init.floor_count_int
+        self.current_floor = curr_floor
+        self.direction = "UP"
+        self.complete = []
+        self.lift_list = []
+        self.curr_ammount_in_elevator = 0
+        self.total_floors_moved = 0
+        self.MAX_IN = data_set_init.elevator_amm_cap
+        self.average_cost = 0
+        self.average_wait = 0
+
+    def move(self, lim_upper, lim_lower):
+        if self.current_floor <= 0:
+            self.direction = "UP"
+
+        if self.current_floor > self.floor:
+            self.direction = "DOWN"
+
+        if self.current_floor == lim_upper:
+            self.direction = "DOWN"
+        elif self.current_floor == lim_lower:
+            self.direction = "UP"
+
+        ELE.up_dw()
+        frame.label_total_count(self.total_floors_moved)
+
+
+
+    def up_dw(self):
+        if self.direction == "UP":
+            self.current_floor += 1
+            frame.moveup()
+        #////////////////######//////####
+        elif self.direction == "DOWN":
+            self.current_floor -= 1
+            frame.movedown()
+        #////////////////######//////####
+
+    def add_to_ele(self, person):
+        self.lift_list.append(person)
+        self.curr_ammount_in_elevator += 1
+
+    def leave_ele(self, person):
+        self.lift_list.remove(person)
+        self.average_cost += person.floors_moved
+        self.curr_ammount_in_elevator -= 1
+        self.complete.append(person.identity)
+
+    def cost(self):
+        for person in self.lift_list:
+            person.floors_moved += 1
+
+    def done(self):
+        print(self.complete)
+        print(self.total_floors_moved)
+
+        print("Number of floors moved/Building floors", self.total_floors_moved/self.floor)
+        print("wait av for a person", self.average_wait/self.total_floors_moved)
+        #cost for wait time (people who wait while not in the lift)
+
+
+class Building():
+    def __init__(self, data_for_logic, ELE, frame): #cust_list, people_count, floor_count
+        self.people_c = data_for_logic.people_count_int
+        self.floors = data_for_logic.floor_count_int
+        self.list = data_for_logic.cust_list
+        self.try_list = []
+        self.nato_list = []
+        self.upto_list = []
+        self.end_list = []
+        self.eff_list = []
+        self.lim_upper = self.floors
+        self.lim_lower = 0
+        Building.sort_agorithum(self)
+        if data_for_logic.algorithum == 1:
+            Building.run_none(self)
+        else:
+            Building.run(self)
+
+    def sort_agorithum(self):
+        for item in self.list:
+            self.try_list.append(item)
+
+    def logic(self):
+        self.nato_list = []
+        self.upto_list = []
+        self.end_list = []
+        self.eff_list = []
+        self.priority_list = []
+
+        for person in self.try_list:
+            if ELE.current_floor == self.floors:
+                self.end_list.append(person)
+            if ELE.current_floor == 0:
+                self.end_list.append(person)
+            if person.going_floor >= ELE.current_floor and ELE.direction == "UP":
+                self.nato_list.append(person)
+                #ELE.direction = "UP"
+            elif person.going_floor <= ELE.current_floor and ELE.direction == "DOWN":
+                self.upto_list.append(person)
+                #ELE.direction = "DOWN"
+
+        if ELE.direction == "UP":
+            list_set = self.nato_list
+        elif ELE.direction == "DOWN":
+            list_set = self.upto_list
+
+        if ELE.current_floor == self.floors:
+            list_set = self.end_list
+        if ELE.current_floor == 0:
+            list_set = self.end_list
+
+        Building.get_on(self, list_set)
+
+    def get_on(self, list_set):
+        for person in list_set:
+            if ELE.current_floor == person.on_floor:
+                if ELE.curr_ammount_in_elevator == ELE.MAX_IN:
+                    frame.full()
+                    Building.get_off(self)
+                elif ELE.curr_ammount_in_elevator == ELE.MAX_IN and len(ELE.lift_list) == ELE.MAX_IN:
+                    frame.full()
+                    ELE.move(self.lim_upper, self.lim_lower)
+                else:
+                    ELE.add_to_ele(person)
+                    frame.change_add_colour()
+                    self.try_list.remove(person) #####
+                    ELE.average_wait += person.waiting_time
+                    frame.re_draw(person, ELE.current_floor)
+
+    def get_off(self):
+        for count_p in range(len(ELE.lift_list)):
+            for rem in ELE.lift_list:
+                if ELE.current_floor == rem.going_floor:
+                    ELE.leave_ele(rem)
+                    frame.change_rem_colour()
+                    self.list.remove(rem)
+                    frame.show_done(rem, ELE.current_floor)
+
+    def run(self):
+        while len(ELE.complete) != self.people_c:
+            lower_lim = self.floors
+            upper_lim = 0
+
+            for person in ELE.lift_list:
+                if person.on_floor <= lower_lim:
+                    lower_lim = person.on_floor
+                if person.going_floor <= lower_lim:
+                    lower_lim = person.going_floor
+                ###########
+                if person.on_floor >= upper_lim:
+                    upper_lim = person.on_floor
+                if person.going_floor >= upper_lim:
+                    upper_lim = person.going_floor
+
+            for person in self.try_list:
+                if person.on_floor <= lower_lim:
+                    lower_lim = person.on_floor
+                if person.going_floor <= lower_lim:
+                    lower_lim = person.going_floor
+                ###########
+                if person.on_floor >= upper_lim:
+                    upper_lim = person.on_floor
+                if person.going_floor >= upper_lim:
+                    upper_lim = person.going_floor
+
+            if upper_lim == self.floors:
+                upper_lim += 0
+            else:
+                upper_lim += 1
+
+            if lower_lim != 0:
+                lower_lim -= 1
+
+            for item in self.try_list:
+                item.waiting_time += 1
+
+            self.lim_lower = lower_lim
+            self.lim_upper = upper_lim
+            Building.get_off(self)
+            #####
+            Building.logic(self)
+
+            ELE.move(self.lim_upper, self.lim_lower)
+            ELE.cost()
+            ELE.total_floors_moved += 1
+            frame.label_average_count(ELE.average_cost/ELE.total_floors_moved)
+            frame.lable_waiting_count(ELE.average_wait/ELE.total_floors_moved)
+        ELE.done()
+
+    def run_none(self):
+        while len(ELE.complete) != self.people_c:
+            time.sleep(.75)
+            for item in self.try_list:
+                item.waiting_time += 1
+            ###
+            self.lim_lower = 0
+            self.lim_upper = self.floors
+            ###
+            Building.get_off(self)
+            Building.get_on(self, self.try_list)
+            ###
+            ELE.move(self.lim_upper, self.lim_lower)
+            ELE.cost()
+            ELE.total_floors_moved += 1
+            frame.label_average_count(ELE.average_cost/ELE.total_floors_moved)
+            frame.lable_waiting_count(ELE.average_wait/ELE.total_floors_moved)
+        ELE.done()
+
+
+class Ele_ui(Frame):
+    def __init__(self, master, data_for_ui):
+        ###
+        self.people_tk_list = data_for_ui.cust_list
+        self.floors_tk_list = data_for_ui.flr_list
+        self.floors_tk = data_for_ui.floor_count_int
+        self.people_tk = data_for_ui.people_count_int
+        ###
+        self.del_list = []
+        ###
+        for item in self.people_tk_list:
+            self.del_list.append(item)
+        ###
+        self.master = master
+        self.canvas = Canvas(self.master, width=1000, height=1000)
+        ###
+        self.canvas.configure(background='Light blue')
+        ###
+        Ele_ui.generate_lift(self)
+        ###
+        Ele_ui.make_floors_tk(self)
+        Ele_ui.make_people_tk(self)
+        ###
+        self.canvas.update()
+        self.canvas.pack()
+
+    def generate_lift(self):
+        x = 120
+        y = 942.5
+        self.lift_sprite = self.canvas.create_rectangle(10, 10, 25, 25, fill = "black")
+        self.canvas.tag_raise(self.lift_sprite)
+        self.canvas.move(self.lift_sprite, x, y)
+
+        self.label_people = Label(self.master, text="People: " + " " + str(self.people_tk))
+        self.canvas.create_window(900, 25, window = self.label_people)
+
+    def make_floors_tk(self):
+        x = 10
+        y = 920
+
+        self.tk_florr = self.canvas.create_rectangle(500, 10, 100, 10, fill = "Black")
+        self.canvas.move(self.tk_florr, x, y+20)
+        ###
+        last = y - (self.floors_tk*20)
+        self.tk_florr = self.canvas.create_rectangle(500, 10, 100, 10, fill = "Black")
+        self.canvas.move(self.tk_florr, x, last)
+        ###
+        for flor in range(self.floors_tk+1):
+            self.tk_florr = self.canvas.create_rectangle(500, 10, 100, 10, fill = "Black")
+            self.canvas.move(self.tk_florr, x, y)
+            y -= 20
+
+    def make_people_tk(self):
+        t = 922.5
+        for floor_range in range(0, self.floors_tk+1):
+            f = 80
+            for person_object_floor in self.floors_tk_list:
+                if floor_range == person_object_floor.FLr_ID:
+                    self.lable_f = Label(self.master, text = floor_range)
+                    self.canvas.create_window(450, t+17.5, window = self.lable_f)
+                    drop_person_set = person_object_floor.people_floor_count
+                    for count in range(0, drop_person_set):
+                        self.tk_neperson = self.canvas.create_rectangle(10, 10, 25, 25, fill = person_object_floor.colour)
+                        self.canvas.move(self.tk_neperson, f, t)
+                        self.canvas.update()
+                        f -= 10
+            t -= 20
+
+    def label_total_count(self, counting):
+        self.label_floors = Label(self.master, text="Floors Moved: " + str(counting))
+        self.canvas.update()
+        self.canvas.create_window(800, 50, window=self.label_floors)
+
+    def label_average_count(self, av_count):
+        self.label_av = Label(self.master, text="Average cost in elevator: " + str(av_count))
+        self.canvas.update()
+        self.canvas.create_window(800, 75, window=self.label_av)
+
+    def lable_waiting_count(self, wait_counting):
+        self.label_wait = Label(self.master, text="Average wait for elevator: " + str(wait_counting))
+        self.canvas.update()
+        self.canvas.create_window(800, 100, window=self.label_wait)
+
+    def full(self):
+        self.canvas.itemconfig(self.lift_sprite, fill='Yellow')
+        self.canvas.update()
+        time.sleep(.1)
+
+    def change_add_colour(self):
+        self.canvas.itemconfig(self.lift_sprite, fill='Green')
+        self.canvas.update()
+        time.sleep(.1)
+        self.canvas.itemconfig(self.lift_sprite, fill='Black')
+        self.canvas.update()
+
+    def change_rem_colour(self):
+        self.canvas.itemconfig(self.lift_sprite, fill='Red')
+        self.canvas.update()
+        time.sleep(.1)
+        self.canvas.itemconfig(self.lift_sprite, fill='Black')
+        self.canvas.update()
+
+    def moveup(self):
+        self.canvas.move(self.lift_sprite, 0, -20)
+        self.canvas.update()
+
+    def movedown(self):
+        self.canvas.move(self.lift_sprite, 0, 20)
+        self.canvas.update()
+
+    def show_done(self, rem_going_floor, ele_curr_fl):
+        x = 300
+        y = 922.5
+        y -= 20*ele_curr_fl
+        for person in self.people_tk_list:
+            if rem_going_floor.going_floor == person.going_floor and rem_going_floor.going_floor == ele_curr_fl:
+                x += 10
+        colour = rem_going_floor.fill
+
+        self.tk_done = self.canvas.create_rectangle(10, 10, 25, 25, fill = colour)
+        self.canvas.move(self.tk_done, x, y)
+        self.canvas.update()
+
+
+    def re_draw(self, person_at_floor, at_floor_off):
+        x = 90
+        y = 922.5
+        y -= 20*at_floor_off
+
+        for person in self.del_list:
+            if person_at_floor.on_floor == person.on_floor and person_at_floor.on_floor == at_floor_off:
+                x -= 10
+
+        self.del_list.remove(person_at_floor)
+        self.tk_newperson = self.canvas.create_rectangle(10, 10, 25, 25, fill = "Orange")
+        self.canvas.move(self.tk_newperson, x, y)
+        self.canvas.update()
+
+
+class Make_FL(object):
+    def __init__(self, i, cust_list, floor_count):
+        self.FLr_ID = i
+        self.cust = cust_list
+        self.people_floor_count = 0
+        for person in self.cust:
+            if person.on_floor == self.FLr_ID:
+                self.people_floor_count += 1
+                self.colour = person.fill
+
+class variables():
+    def __init__(self, people_count_int= 0, floor_count_int= 0, lift_count= 1):
+        self.cust_list = []
+        self.flr_list = []
+        self.people_count_int = 0
+        self.floor_count_int = 0
+        self.elevator_amm_cap = 0
+        self.algorithum = 0
+        ###///###
+        self.master = Tk()
+        self.master.title("Set variables GUI")
+        self.canvas = Canvas(self.master, width=500, height=250)
+
+
+        variables.people_set(self)
+        variables.floors_set(self)
+        variables.elevator_capactity(self)
+
+        self.button_create = Button(self.master, text="Set variables", command=self.add)
+        self.canvas.create_window(250, 180, window=self.button_create)
+
+        self.button_base_create = Button(self.master, text="Set variables with Base Case", command=self.add_base)
+        self.canvas.create_window(250, 210, window=self.button_base_create)
+
+        ###////####
+        self.canvas.pack()
+        self.master.mainloop()
+
+    def elevator_capactity(self):
+        self.lable_e = Label(self.master, text="Enter elevator capactity")
+        self.canvas.create_window(400, 100, window=self.lable_e)
+        ####
+        self.entry_amm = Entry(self.master)
+        self.canvas.create_window(400, 140, window=self.entry_amm)
+        ####
+        self.canvas.update()
+
+    def people_set(self):
+        self.lable_p = Label(self.master, text = "Enter ammount of People")
+        self.canvas.create_window(100, 100, window = self.lable_p)
+        ######
+        self.entry_person = Entry(self.master)
+        self.canvas.create_window(100, 140, window=self.entry_person)
+        ####
+        self.canvas.update()
+
+    def floors_set(self):
+        self.lable_f = Label(self.master, text = "Enter ammount of Floors")
+        self.canvas.create_window(250, 100, window = self.lable_f)
+        ######
+        self.entry_floors = Entry(self.master)
+        self.canvas.create_window(250, 140, window=self.entry_floors)
+        ####
+        self.canvas.update()
+
+    def check(self):
+        try:
+            val = int(self.entry_person.get())
+            val2 = int(self.entry_floors.get())
+            val3 = int(self.entry_amm.get())
+        except ValueError:
+            self.lable_error = Label(self.master, text="Invalid entry")
+            self.lable_error.config(fg="Red")
+            self.canvas.create_window(180, 50, window=self.lable_error)
+
+    def add(self):
+        variables.check(self)
+        ##
+        self.people_count_int = int(self.entry_person.get())
+        self.floor_count_int = int(self.entry_floors.get())
+        self.elevator_amm_cap = int(self.entry_amm.get())
+        #
+        for number_ID in range(1, self.people_count_int+1):
+            self.cust_list.append(People(number_ID, self.floor_count_int))
+        #
+        for floor_ID in range(0, self.floor_count_int+1):
+            self.flr_list.append(Make_FL(floor_ID, self.cust_list, self.floor_count_int))
+        ##
+        self.algorithum = 0
+        self.master.destroy()
+
+    def add_base(self):
+        variables.check(self)
+        ##
+        self.people_count_int = int(self.entry_person.get())
+        self.floor_count_int = int(self.entry_floors.get())
+        self.elevator_amm_cap = int(self.entry_amm.get())
+
+        for number_ID in range(1, self.people_count_int+1):
+            self.cust_list.append(People(number_ID, self.floor_count_int))
+        #
+        for floor_ID in range(0, self.floor_count_int+1):
+            self.flr_list.append(Make_FL(floor_ID, self.cust_list, self.floor_count_int))
+        ##
+        self.algorithum = 1
+        self.master.destroy()
+
+
+if __name__ == "__main__":
+    data_set = variables()
+    # people()
+    master = Tk()
+    master.title("Elevator GUI")
+    ###//
+    frame = Ele_ui(master, data_set) #floor_count, people_count, cust_list, flr_list,
+    ###//
+    ELE = Elevator(data_set, frame) #cust_list, people_count, floor_count
+    ###//
+    building = Building(data_set, ELE, frame) #cust_list, people_count, floor_count
+    ###//
+    master.mainloop()
+
+        # cust_list = []
+        # flr_list = []
+        # ###//
+        # people_count = 30 #int(input("How many people are in the building?: "))
+        # floor_count = 40 #int(input("How many floors does the building have?: "))
+        # ###//
+        # for i in range(1, people_count+1):
+        #     cust_list.append(People(i, floor_count))
+        # ###//
+        # for i in range(0, floor_count+1):
+        #     flr_list.append(Make_FL(i, cust_list, floor_count))
